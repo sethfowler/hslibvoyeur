@@ -1,0 +1,22 @@
+name:                hslibvoyeur
+version:             0.1.0.0
+synopsis:            Haskell bindings for libvoyeur
+description:         Haskell bindings for libvoyeur, a library for observing the private
+                     activities of child processes.
+homepage:            https://github.com/sethfowler/hslibvoyeur
+license:             BSD3
+license-file:        LICENSE
+author:              Seth Fowler <mark.seth.fowler@gmail.com>
+maintainer:          Seth Fowler <mark.seth.fowler@gmail.com>
+copyright:           Copyright (C) 2014 Seth Fowler
+category:            System
+build-type:          Simple
+cabal-version:       >=1.10
+
+library
+  ghc-options:         -Wall -O
+  exposed-modules:     System.Process.Voyeur
+  other-modules:       System.Process.Voyeur.FFI
+  build-depends:       base >=4.6 && <4.7
+  hs-source-dirs:      src
+  default-language:    Haskell2010
