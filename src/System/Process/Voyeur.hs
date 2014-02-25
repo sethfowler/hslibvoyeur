@@ -7,6 +7,10 @@ module System.Process.Voyeur
 , FFI.defaultObserveExecFlags
 , FFI.ObserveExecHandler
 , FFI.observeExec
+, FFI.ObserveExitFlags(..)
+, FFI.defaultObserveExitFlags
+, FFI.ObserveExitHandler
+, FFI.observeExit
 , FFI.ObserveOpenFlags(..)
 , FFI.defaultObserveOpenFlags
 , FFI.ObserveOpenHandler

@@ -9,6 +9,10 @@ module System.Process.Voyeur.FFI
 , defaultObserveExecFlags
 , ObserveExecHandler
 , observeExec
+, ObserveExitFlags(..)
+, defaultObserveExitFlags
+, ObserveExitHandler
+, observeExit
 , ObserveOpenFlags(..)
 , defaultObserveOpenFlags
 , ObserveOpenHandler
@@ -30,6 +34,7 @@ import Data.Word
 import Foreign
 import Foreign.C.String
 import Foreign.C.Types
+import System.Exit
 import System.Posix.Types
 
 --------------------------------------------------
@@ -92,6 +97,33 @@ observeExec c (ObserveExecFlags {..}) h = do
 
   voyeur_observe_exec (unVoyeurContext c) flags h' nullPtr
     
+-- Observing exit() calls.
+data ObserveExitFlags = ObserveExitFlags
+                         deriving (Show)
+
+defaultObserveExitFlags :: ObserveExitFlags
+defaultObserveExitFlags = ObserveExitFlags
+
+type ExitCallback = CInt -> CPid -> CPid -> Ptr () -> IO ()
+
+foreign import ccall "wrapper"
+  wrapExitCallback :: ExitCallback -> IO (FunPtr ExitCallback)
+
+foreign import ccall unsafe "voyeur.h voyeur_observe_exit"
+  voyeur_observe_exit :: Ptr () -> Word8 -> FunPtr ExitCallback -> Ptr () -> IO ()
+                         
+type ObserveExitHandler = ExitCode -> ProcessID -> ProcessID -> IO ()
+
+observeExit :: VoyeurContext -> ObserveExitFlags -> ObserveExitHandler -> IO ()
+observeExit c _ h = do
+  h' <- wrapExitCallback $ \status pid ppid _ -> do
+    let exitCode = case status of
+                     0 -> ExitSuccess
+                     _ -> ExitFailure (fromIntegral status)
+    h exitCode pid ppid
+
+  voyeur_observe_exit (unVoyeurContext c) 0 h' nullPtr
+
 -- Observing open() calls.
 data ObserveOpenFlags = ObserveOpenFlags
   { observeOpenCWD      :: !Bool

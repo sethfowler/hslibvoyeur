@@ -15,9 +15,11 @@ doWatch :: [String] -> VoyeurContext -> IO ()
 doWatch args c = do
   -- Set up our handlers.
   let execFlags = defaultObserveExecFlags { observeExecCWD = True, observeExecEnv = True }
+      exitFlags = defaultObserveExitFlags
       openFlags = defaultObserveOpenFlags { observeOpenCWD = True }
       closeFlags = defaultObserveCloseFlags
   observeExec c execFlags execHandler
+  observeExit c exitFlags exitHandler
   observeOpen c openFlags openHandler
   observeClose c closeFlags closeHandler
 
@@ -34,20 +36,26 @@ doWatch args c = do
 execHandler :: ObserveExecHandler
 execHandler path argv envp cwd pid ppid = do
   putStrLn $ "[EXEC] " ++ show path ++ " " ++ show argv
-                       ++ " (in " ++ show cwd ++ ") (pid "
-                       ++ show pid ++ ") (ppid " ++ show ppid
-                       ++ ")"
+                       ++ " (in " ++ show cwd ++ ")"
+                       ++ " (pid " ++ show pid ++ ")"
+                       ++ " (ppid " ++ show ppid ++ ")"
   unless (null envp) $ do
     putStrLn "  environment:"
     forM_ envp $ \e ->
       putStrLn $ "    " ++ show e
 
+exitHandler :: ObserveExitHandler
+exitHandler exitCode pid ppid =
+  putStrLn $ "[EXIT] " ++ show exitCode
+                       ++ " (pid " ++ show pid ++ ")"
+                       ++ " (ppid " ++ show ppid ++ ")"
+
 openHandler :: ObserveOpenHandler
 openHandler path oflag mode cwd retval pid =
   putStrLn $ "[OPEN] " ++ show path ++ " " ++ show oflag
                        ++ " " ++ show mode ++ " " ++ show retval
-                       ++ " (in " ++ show cwd ++ ") (pid "
-                       ++ show pid ++ ")"
+                       ++ " (in " ++ show cwd ++ ")"
+                       ++ " (pid " ++ show pid ++ ")"
 
 closeHandler :: ObserveCloseHandler
 closeHandler fd retval pid =
