@@ -83,10 +83,10 @@ observeExec c (ObserveExecFlags {..}) h = do
            .|. (asBit 2 observeExecNoAccess)
 
   h' <- wrapExecCallback $ \path argv envp cwd pid ppid _ -> do
-    path' <- BS.packCString path
-    argv' <- peekCStringArray argv
-    envp' <- peekCStringArray envp
-    cwd'  <- BS.packCString cwd
+    path' <- safePackCString path
+    argv' <- packCStringArray argv
+    envp' <- packCStringArray envp
+    cwd'  <- safePackCString cwd
     h path' argv' envp' cwd' pid ppid
 
   voyeur_observe_exec (unVoyeurContext c) flags h' nullPtr
@@ -115,8 +115,8 @@ observeOpen c (ObserveOpenFlags {..}) h = do
   let flags = (asBit 0 observeOpenCWD)
 
   h' <- wrapOpenCallback $ \path oflag mode cwd retval pid _ -> do
-    path' <- BS.packCString path
-    cwd' <- BS.packCString cwd
+    path' <- safePackCString path
+    cwd' <- safePackCString cwd
     h path' (fromIntegral oflag) mode cwd' (fromIntegral retval) pid
 
   voyeur_observe_open (unVoyeurContext c) flags h' nullPtr
@@ -156,7 +156,8 @@ foreign import ccall unsafe "voyeur.h voyeur_prepare"
 prepareEnvironment :: VoyeurContext -> [(String, String)] -> IO [(String, String)]
 prepareEnvironment c envp = bracket newCEnvp freeCEnvp $ \envp' -> do
     cEnvp <- withArray0 nullPtr envp' (voyeur_prepare (unVoyeurContext c))
-    envp'' <- peekCStringArray' cEnvp
+    envp'' <- peekCStringArray cEnvp
+    free cEnvp
     return $ map envSplit envp''
   where
     newCEnvp = mapM (newCString . envJoin) envp
@@ -177,15 +178,25 @@ asBit :: Int -> Bool -> Word8
 asBit n True  = shiftL 1 n
 asBit _ False = 0
 
-peekCStringArray :: Ptr CString -> IO [BS.ByteString]
-peekCStringArray array = do
-  array' <- peekArray0 nullPtr array
-  mapM BS.packCString array'
+safePackCString :: CString -> IO BS.ByteString
+safePackCString s | s == nullPtr = return BS.empty
+                  | otherwise    = BS.packCString s
 
-peekCStringArray' :: Ptr CString -> IO [String]
-peekCStringArray' array = do
-  array' <- peekArray0 nullPtr array
-  mapM peekCString array'
+safePeekCString :: CString -> IO String
+safePeekCString s | s == nullPtr = return ""
+                  | otherwise    = peekCString s
+
+packCStringArray :: Ptr CString -> IO [BS.ByteString]
+packCStringArray array
+  | array == nullPtr = return []
+  | otherwise        = do array' <- peekArray0 nullPtr array
+                          mapM safePackCString array'
+
+peekCStringArray :: Ptr CString -> IO [String]
+peekCStringArray array
+  | array == nullPtr = return []
+  | otherwise        = do array' <- peekArray0 nullPtr array
+                          mapM safePeekCString array'
 
 envJoin :: (String, String) -> String
 envJoin (k, v) = concat [k, "=", v]
