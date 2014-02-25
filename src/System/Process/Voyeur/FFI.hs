@@ -25,6 +25,7 @@ import Control.Applicative
 import Control.Exception
 import Data.Bits
 import qualified Data.ByteString as BS
+import qualified Data.ByteString.Char8 as BC
 import Data.Word
 import Foreign
 import Foreign.C.String
@@ -73,8 +74,8 @@ foreign import ccall "wrapper"
 foreign import ccall unsafe "voyeur.h voyeur_observe_exec"
   voyeur_observe_exec :: Ptr () -> Word8 -> FunPtr ExecCallback -> Ptr () -> IO ()
                          
-type ObserveExecHandler = BS.ByteString -> [BS.ByteString] -> [BS.ByteString] -> BS.ByteString
-                       -> ProcessID -> ProcessID -> IO ()
+type ObserveExecHandler = BS.ByteString -> [BS.ByteString] -> [(BS.ByteString, BS.ByteString)]
+                       -> BS.ByteString -> ProcessID -> ProcessID -> IO ()
 
 observeExec :: VoyeurContext -> ObserveExecFlags -> ObserveExecHandler -> IO ()
 observeExec c (ObserveExecFlags {..}) h = do
@@ -87,7 +88,7 @@ observeExec c (ObserveExecFlags {..}) h = do
     argv' <- packCStringArray argv
     envp' <- packCStringArray envp
     cwd'  <- safePackCString cwd
-    h path' argv' envp' cwd' pid ppid
+    h path' argv' (map bsEnvSplit envp') cwd' pid ppid
 
   voyeur_observe_exec (unVoyeurContext c) flags h' nullPtr
     
@@ -203,7 +204,14 @@ envJoin (k, v) = concat [k, "=", v]
 
 envSplit :: String -> (String, String)
 envSplit = safeTailSnd . break (== '=')
+
+bsEnvSplit :: BS.ByteString -> (BS.ByteString, BS.ByteString)
+bsEnvSplit = bsSafeTailSnd . BC.break (== '=')
   
 safeTailSnd :: (String, String) -> (String, String)
 safeTailSnd (a, b) | null b    = (a, b)
                    | otherwise = (a, tail b)
+
+bsSafeTailSnd :: (BS.ByteString, BS.ByteString) -> (BS.ByteString, BS.ByteString)
+bsSafeTailSnd (a, b) | BS.null b = (a, b)
+                     | otherwise = (a, BS.tail b)
