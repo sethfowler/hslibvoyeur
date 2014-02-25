@@ -7,7 +7,7 @@ main :: IO ()
 main = do
   args <- getArgs
   if null args then
-    putStrLn "Usage: watch-exec [command]"
+    putStrLn "Usage: voyeur-watch [command]"
   else
     withVoyeur (doWatch args)
 
