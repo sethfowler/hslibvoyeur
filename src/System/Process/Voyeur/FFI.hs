@@ -116,11 +116,8 @@ type ObserveExitHandler = ExitCode -> ProcessID -> ProcessID -> IO ()
 
 observeExit :: VoyeurContext -> ObserveExitFlags -> ObserveExitHandler -> IO ()
 observeExit c _ h = do
-  h' <- wrapExitCallback $ \status pid ppid _ -> do
-    let exitCode = case status of
-                     0 -> ExitSuccess
-                     _ -> ExitFailure (fromIntegral status)
-    h exitCode pid ppid
+  h' <- wrapExitCallback $ \status pid ppid _ ->
+    h (asExitCode status) pid ppid
 
   voyeur_observe_exit (unVoyeurContext c) 0 h' nullPtr
 
@@ -199,8 +196,8 @@ prepareEnvironment c envp = bracket newCEnvp freeCEnvp $ \envp' -> do
 foreign import ccall safe "voyeur.h voyeur_start"
   voyeur_start :: Ptr () -> CPid -> IO CInt
 
-startObserving :: VoyeurContext -> ProcessID -> IO Int
-startObserving c pid = fromIntegral <$> voyeur_start (unVoyeurContext c) pid
+startObserving :: VoyeurContext -> ProcessID -> IO ExitCode
+startObserving c pid = asExitCode <$> voyeur_start (unVoyeurContext c) pid
 
 
 --------------------------------------------------
@@ -210,6 +207,10 @@ startObserving c pid = fromIntegral <$> voyeur_start (unVoyeurContext c) pid
 asBit :: Int -> Bool -> Word8
 asBit n True  = shiftL 1 n
 asBit _ False = 0
+
+asExitCode :: CInt -> ExitCode
+asExitCode 0 = ExitSuccess
+asExitCode s = ExitFailure (fromIntegral s)
 
 safePackCString :: CString -> IO BS.ByteString
 safePackCString s | s == nullPtr = return BS.empty

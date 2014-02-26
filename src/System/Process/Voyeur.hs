@@ -26,6 +26,7 @@ module System.Process.Voyeur
 
 import Control.Concurrent.MVar (readMVar)
 import Control.Exception (bracket)
+import System.Exit (ExitCode(..))
 import System.Posix.Types (ProcessID)
 import System.Process.Internals (ProcessHandle(..), ProcessHandle__(..))
 
@@ -50,9 +51,9 @@ instance HasPid ProcessHandle where
       _                -> return Nothing
     
 
-startObserving :: HasPid a => FFI.VoyeurContext -> a -> IO Int
+startObserving :: HasPid a => FFI.VoyeurContext -> a -> IO ExitCode
 startObserving c p = do
   mayPid <- toPid p
   case mayPid of
     Just pid -> FFI.startObserving c pid
-    Nothing  -> return (-1)
+    Nothing  -> return $ ExitFailure (-1)
