@@ -43,13 +43,26 @@ instance HasPid ProcessID where
 
 -- Unfortunately, we have to reach into the internals of
 -- System.Process for this one.
+
+#if MIN_VERSION_process(1,2,0)
+
+instance HasPid ProcessHandle where
+  toPid (ProcessHandle m _) = do
+    p <- readMVar m
+    case p of
+      (OpenHandle pid) -> return $ Just pid
+      _                -> return Nothing
+    
+#else
+
 instance HasPid ProcessHandle where
   toPid (ProcessHandle m) = do
     p <- readMVar m
     case p of
       (OpenHandle pid) -> return $ Just pid
       _                -> return Nothing
-    
+
+#endif
 
 startObserving :: HasPid a => FFI.VoyeurContext -> a -> IO ExitCode
 startObserving c p = do
