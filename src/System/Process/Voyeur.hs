@@ -31,7 +31,7 @@ import System.FilePath
 import System.Posix.Types (ProcessID)
 import System.Process.Internals (ProcessHandle(..), ProcessHandle__(..))
 
-import Paths_hslibvoyeur (getDataFileName)
+import Paths_voyeur (getDataFileName)
 import qualified System.Process.Voyeur.FFI as FFI
 
 withVoyeur :: (FFI.VoyeurContext -> IO a) -> IO a
