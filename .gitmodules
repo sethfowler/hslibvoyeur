@@ -1,3 +1,3 @@
 [submodule "libvoyeur"]
 	path = libvoyeur
-	url = git@github.com:sethfowler/libvoyeur.git
+	url = https://github.com/sethfowler/libvoyeur.git
