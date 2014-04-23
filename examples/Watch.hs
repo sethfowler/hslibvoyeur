@@ -1,4 +1,5 @@
 import Control.Monad
+import Data.Maybe
 import System.Environment
 import System.Process (runProcess)
 import System.Process.Voyeur
@@ -14,24 +15,23 @@ main = do
 doWatch :: [String] -> VoyeurContext -> IO ()
 doWatch args c = do
   -- Set up our handlers.
-  let execFlags = defaultObserveExecFlags { observeExecCWD = True, observeExecEnv = True }
-      exitFlags = defaultObserveExitFlags
-      openFlags = defaultObserveOpenFlags { observeOpenCWD = True }
-      closeFlags = defaultObserveCloseFlags
+  let execFlags = defaultExecFlags { observeExecCWD = True, observeExecEnv = True }
+      openFlags = defaultOpenFlags { observeOpenCWD = True }
   observeExec c execFlags execHandler
-  observeExit c exitFlags exitHandler
+  observeExit c exitHandler
   observeOpen c openFlags openHandler
-  observeClose c closeFlags closeHandler
+  observeClose c closeHandler
 
   -- Set up the environment.
   envp <- prepareEnvironment c =<< getEnvironment
 
-  -- Start the child process.
-  handle <- runProcess (head args) (tail args) Nothing (Just envp) Nothing Nothing Nothing
+  when (isJust envp) $ do
+    -- Start the child process.
+    handle <- runProcess (head args) (tail args) Nothing envp Nothing Nothing Nothing
 
-  -- Observe it! startObserving only returns when the child process
-  -- exits, so we don't need to wait.
-  void $ startObserving c handle
+    -- Observe it! startObserving only returns when the child process
+    -- exits, so we don't need to wait.
+    void $ startObserving c handle
 
 execHandler :: ObserveExecHandler
 execHandler path argv envp cwd pid ppid = do

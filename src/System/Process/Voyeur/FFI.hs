@@ -6,19 +6,15 @@ module System.Process.Voyeur.FFI
 , createContext
 , destroyContext
 , ObserveExecFlags(..)
-, defaultObserveExecFlags
+, defaultExecFlags
 , ObserveExecHandler
 , observeExec
-, ObserveExitFlags(..)
-, defaultObserveExitFlags
 , ObserveExitHandler
 , observeExit
 , ObserveOpenFlags(..)
-, defaultObserveOpenFlags
+, defaultOpenFlags
 , ObserveOpenHandler
 , observeOpen
-, ObserveCloseFlags(..)
-, defaultObserveCloseFlags
 , ObserveCloseHandler
 , observeClose
 , setResourcePath
@@ -42,6 +38,7 @@ import System.Posix.Types
 -- Creating and destroying libvoyeur contexts.
 --------------------------------------------------
 
+-- | The context libvoyeur uses to store its state.
 newtype VoyeurContext = VoyeurContext { unVoyeurContext :: Ptr () }
 
 foreign import ccall unsafe "voyeur.h voyeur_context_create"
@@ -61,15 +58,17 @@ destroyContext = voyeur_context_destroy . unVoyeurContext
 -- Registering callbacks for particular events.
 --------------------------------------------------
 
--- Observing exec*() calls.
+-- | Flags for observing 'exec*' calls.
 data ObserveExecFlags = ObserveExecFlags
-  { observeExecCWD      :: !Bool
-  , observeExecEnv      :: !Bool
-  , observeExecNoAccess :: !Bool
-  } deriving (Show)
+  { observeExecCWD      :: !Bool  -- ^ True if you want the current working directory.
+  , observeExecEnv      :: !Bool  -- ^ True if you want the environment. (Potentially slow.)
+  , observeExecNoAccess :: !Bool  -- ^ True if you want to see calls that
+                                  --   fail due to access restrictions.
+  } deriving (Eq, Show)
 
-defaultObserveExecFlags :: ObserveExecFlags
-defaultObserveExecFlags = ObserveExecFlags False False False
+-- | Default flags which observe the minimum amount of information.
+defaultExecFlags :: ObserveExecFlags
+defaultExecFlags = ObserveExecFlags False False False
 
 type ExecCallback = CString -> Ptr CString -> Ptr CString -> CString
                  -> CPid -> CPid -> Ptr () -> IO ()
@@ -80,14 +79,25 @@ foreign import ccall "wrapper"
 foreign import ccall unsafe "voyeur.h voyeur_observe_exec"
   voyeur_observe_exec :: Ptr () -> Word8 -> FunPtr ExecCallback -> Ptr () -> IO ()
                          
-type ObserveExecHandler = BS.ByteString -> [BS.ByteString] -> [(BS.ByteString, BS.ByteString)]
-                       -> BS.ByteString -> ProcessID -> ProcessID -> IO ()
+-- | A handler for 'exec*' calls.
+type ObserveExecHandler = BS.ByteString                     -- ^ The file being executed.
+                       -> [BS.ByteString]                   -- ^ The arguments.
+                       -> [(BS.ByteString, BS.ByteString)]  -- ^ The environment (if requested).
+                       -> BS.ByteString                     -- ^ The working directory
+                                                            --   (if requested).
+                       -> ProcessID                         -- ^ The new process ID.
+                       -> ProcessID                         -- ^ The parent process ID.
+                       -> IO ()
 
-observeExec :: VoyeurContext -> ObserveExecFlags -> ObserveExecHandler -> IO ()
+-- | Observe calls to the 'exec*' and 'posix_spawn*' families of functions.
+observeExec :: VoyeurContext        -- ^ The context.
+            -> ObserveExecFlags     -- ^ Flags controlling what will be observed.
+            -> ObserveExecHandler   -- ^ A handler for observed 'exec*' events.
+            -> IO ()
 observeExec c (ObserveExecFlags {..}) h = do
-  let flags =  (asBit 0 observeExecCWD)
-           .|. (asBit 1 observeExecEnv)
-           .|. (asBit 2 observeExecNoAccess)
+  let flags =  asBit 0 observeExecCWD
+           .|. asBit 1 observeExecEnv
+           .|. asBit 2 observeExecNoAccess
 
   h' <- wrapExecCallback $ \path argv envp cwd pid ppid _ -> do
     path' <- safePackCString path
@@ -99,12 +109,6 @@ observeExec c (ObserveExecFlags {..}) h = do
   voyeur_observe_exec (unVoyeurContext c) flags h' nullPtr
     
 -- Observing exit() calls.
-data ObserveExitFlags = ObserveExitFlags
-                         deriving (Show)
-
-defaultObserveExitFlags :: ObserveExitFlags
-defaultObserveExitFlags = ObserveExitFlags
-
 type ExitCallback = CInt -> CPid -> CPid -> Ptr () -> IO ()
 
 foreign import ccall "wrapper"
@@ -113,22 +117,30 @@ foreign import ccall "wrapper"
 foreign import ccall unsafe "voyeur.h voyeur_observe_exit"
   voyeur_observe_exit :: Ptr () -> Word8 -> FunPtr ExitCallback -> Ptr () -> IO ()
                          
-type ObserveExitHandler = ExitCode -> ProcessID -> ProcessID -> IO ()
+-- | A handler for \'exit\' calls.
+type ObserveExitHandler = ExitCode   -- ^ The exit status.
+                       -> ProcessID  -- ^ The process ID of the exiting process.
+                       -> ProcessID  -- ^ The parent process ID of the exiting process.
+                       -> IO ()
 
-observeExit :: VoyeurContext -> ObserveExitFlags -> ObserveExitHandler -> IO ()
-observeExit c _ h = do
+-- | Observe calls to \'exit\'.
+observeExit :: VoyeurContext       -- ^ The context.
+            -> ObserveExitHandler  -- ^ A handler for observed \'exit\' events.
+            -> IO ()
+observeExit c h = do
   h' <- wrapExitCallback $ \status pid ppid _ ->
     h (asExitCode status) pid ppid
 
   voyeur_observe_exit (unVoyeurContext c) 0 h' nullPtr
 
--- Observing open() calls.
+-- | Flags for observing \'open\' calls.
 data ObserveOpenFlags = ObserveOpenFlags
-  { observeOpenCWD      :: !Bool
-  } deriving (Show)
+  { observeOpenCWD :: !Bool  -- ^ True if you want the current working directory.
+  } deriving (Eq, Show)
 
-defaultObserveOpenFlags :: ObserveOpenFlags
-defaultObserveOpenFlags = ObserveOpenFlags False
+-- | Default flags which observe the minimum amount of information.
+defaultOpenFlags :: ObserveOpenFlags
+defaultOpenFlags = ObserveOpenFlags False
 
 type OpenCallback = CString -> CInt -> CMode -> CString -> CInt -> CPid -> Ptr () -> IO ()
 
@@ -138,10 +150,22 @@ foreign import ccall "wrapper"
 foreign import ccall unsafe "voyeur.h voyeur_observe_open"
   voyeur_observe_open :: Ptr () -> Word8 -> FunPtr OpenCallback -> Ptr () -> IO ()
                          
-type ObserveOpenHandler = BS.ByteString -> Int -> CMode -> BS.ByteString -> Int
-                       -> ProcessID -> IO ()
+-- | A handler for \'open\' calls.
+type ObserveOpenHandler = BS.ByteString  -- ^ The file being opened.
+                       -> Int            -- ^ The flags used to open the file.
+                       -> FileMode       -- ^ The mode. Only meaningful if O_CREAT
+                                         --   was specified.
+                       -> BS.ByteString  -- ^ The working directory (if requested).
+                       -> Int            -- ^ The return value of \'open\'. May be a
+                                         --   file descriptor or an error value.
+                       -> ProcessID      -- ^ The process ID of the observed process.
+                       -> IO ()
 
-observeOpen :: VoyeurContext -> ObserveOpenFlags -> ObserveOpenHandler -> IO ()
+-- | Observe calls to \'open\'.
+observeOpen :: VoyeurContext       -- ^ The context.
+            -> ObserveOpenFlags    -- ^ Flags controlling what will be observed.
+            -> ObserveOpenHandler  -- ^ A handler for observed \'open\' events.
+            -> IO ()
 observeOpen c (ObserveOpenFlags {..}) h = do
   let flags = (asBit 0 observeOpenCWD)
 
@@ -153,12 +177,6 @@ observeOpen c (ObserveOpenFlags {..}) h = do
   voyeur_observe_open (unVoyeurContext c) flags h' nullPtr
 
 -- Observing close() calls.
-data ObserveCloseFlags = ObserveCloseFlags
-                         deriving (Show)
-
-defaultObserveCloseFlags :: ObserveCloseFlags
-defaultObserveCloseFlags = ObserveCloseFlags
-
 type CloseCallback = CInt -> CInt -> CPid -> Ptr () -> IO ()
 
 foreign import ccall "wrapper"
@@ -167,10 +185,17 @@ foreign import ccall "wrapper"
 foreign import ccall unsafe "voyeur.h voyeur_observe_close"
   voyeur_observe_close :: Ptr () -> Word8 -> FunPtr CloseCallback -> Ptr () -> IO ()
                          
-type ObserveCloseHandler = Int -> Int -> ProcessID -> IO ()
+-- | A handler for \'close\' calls.
+type ObserveCloseHandler = Int        -- ^ The file descriptor being closed.
+                        -> Int        -- ^ The return value of \'close\'.
+                        -> ProcessID  -- ^ The process ID of the observed process.
+                        -> IO ()
 
-observeClose :: VoyeurContext -> ObserveCloseFlags -> ObserveCloseHandler -> IO ()
-observeClose c _ h = do
+-- | Observe calls to \'close\'.
+observeClose :: VoyeurContext        -- ^ The context.
+             -> ObserveCloseHandler  -- ^ A handler for observed \'close\' events.
+             -> IO ()
+observeClose c h = do
   h' <- wrapCloseCallback $ \fd retval pid _ ->
     h (fromIntegral fd) (fromIntegral retval) pid
 
@@ -195,7 +220,22 @@ setResourcePath c path = withCString path $ \cPath ->
 foreign import ccall unsafe "voyeur.h voyeur_prepare"
   voyeur_prepare :: Ptr () -> Ptr CString -> IO (Ptr CString)
 
-prepareEnvironment :: VoyeurContext -> [(String, String)] -> IO (Maybe [(String, String)])
+-- | Prepares an environment for a child process you want to observe.
+-- 'prepareEnvironment' starts the server component of libvoyeur and
+-- adds or modifies environment variables as necessary to inject code
+-- into the child process you're about to create and make sure it can
+-- connect to the server.
+--
+-- Generally after calling 'prepareEnvironment', you'll want to start
+-- the child process using the returned environment, and then call
+-- 'System.Process.Voyeur.startObserving' to begin receiving events.
+--
+-- If something goes wrong, 'prepareEnvironment' will return 'Nothing'.
+prepareEnvironment :: VoyeurContext                  -- ^ The context.
+                   -> [(String, String)]             -- ^ The environment you want to use.
+                   -> IO (Maybe [(String, String)])  -- ^ A modified version of that
+                                                     --   environment, or 'Nothing' if something
+                                                     --   went wrong.
 prepareEnvironment c envp = bracket newCEnvp freeCEnvp $ \envp' -> do
     cEnvp <- withArray0 nullPtr envp' (voyeur_prepare (unVoyeurContext c))
     if cEnvp == nullPtr
