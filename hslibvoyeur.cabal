@@ -11,7 +11,8 @@ maintainer:          Seth Fowler <mark.seth.fowler@gmail.com>
 copyright:           Copyright (C) 2014 Seth Fowler
 category:            System
 build-type:          Custom
-cabal-version:       >=1.10
+cabal-version:       >= 1.20
+data-files:          libvoyeur/build/*.dylib
 
 flag build-example
   description:         Builds an example program
@@ -20,14 +21,16 @@ flag build-example
 library
   ghc-options:         -Wall -O
   exposed-modules:     System.Process.Voyeur
-  other-modules:       System.Process.Voyeur.FFI
+  other-modules:       System.Process.Voyeur.FFI,
+                       Paths_hslibvoyeur
   build-depends:       base >=4.6 && <4.8,
                        bytestring >=0.10 && <0.11,
+                       filepath >=1.3 && <1.4,
                        process >=1.1 && <1.3,
                        utf8-string >=0.3 && <0.4
   hs-source-dirs:      src
   default-language:    Haskell2010
-  extensions:          CPP
+  default-extensions:  CPP
 
 executable voyeur-watch
   if !flag(build-example)

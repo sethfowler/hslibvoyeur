@@ -21,6 +21,7 @@ module System.Process.Voyeur.FFI
 , defaultObserveCloseFlags
 , ObserveCloseHandler
 , observeClose
+, setResourcePath
 , prepareEnvironment
 , startObserving
 ) where
@@ -175,6 +176,17 @@ observeClose c _ h = do
 
   voyeur_observe_close (unVoyeurContext c) 0 h' nullPtr
 
+
+--------------------------------------------------
+-- Other context configuration options.
+--------------------------------------------------
+
+foreign import ccall unsafe "voyeur.h voyeur_set_resource_path"
+  voyeur_set_resource_path :: Ptr () -> CString -> IO ()
+
+setResourcePath :: VoyeurContext -> FilePath -> IO ()
+setResourcePath c path = withCString path $ \cPath ->
+                           voyeur_set_resource_path (unVoyeurContext c) cPath
 
 --------------------------------------------------
 -- Observing processes.

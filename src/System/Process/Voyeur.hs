@@ -27,13 +27,21 @@ module System.Process.Voyeur
 import Control.Concurrent.MVar (readMVar)
 import Control.Exception (bracket)
 import System.Exit (ExitCode(..))
+import System.FilePath
 import System.Posix.Types (ProcessID)
 import System.Process.Internals (ProcessHandle(..), ProcessHandle__(..))
 
+import Paths_hslibvoyeur (getDataFileName)
 import qualified System.Process.Voyeur.FFI as FFI
 
 withVoyeur :: (FFI.VoyeurContext -> IO a) -> IO a
-withVoyeur = bracket FFI.createContext FFI.destroyContext
+withVoyeur = bracket initContext FFI.destroyContext
+ where
+   initContext = do
+     c <- FFI.createContext
+     rPath <- getDataFileName $ "libvoyeur" </> "build"
+     FFI.setResourcePath c (addTrailingPathSeparator rPath)
+     return c
 
 class HasPid a where
   toPid :: a -> IO (Maybe ProcessID)
