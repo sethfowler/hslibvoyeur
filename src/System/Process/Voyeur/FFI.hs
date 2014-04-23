@@ -195,12 +195,14 @@ setResourcePath c path = withCString path $ \cPath ->
 foreign import ccall unsafe "voyeur.h voyeur_prepare"
   voyeur_prepare :: Ptr () -> Ptr CString -> IO (Ptr CString)
 
-prepareEnvironment :: VoyeurContext -> [(String, String)] -> IO [(String, String)]
+prepareEnvironment :: VoyeurContext -> [(String, String)] -> IO (Maybe [(String, String)])
 prepareEnvironment c envp = bracket newCEnvp freeCEnvp $ \envp' -> do
     cEnvp <- withArray0 nullPtr envp' (voyeur_prepare (unVoyeurContext c))
-    envp'' <- peekCStringArray cEnvp
-    free cEnvp
-    return $ map envSplit envp''
+    if cEnvp == nullPtr
+       then return Nothing
+       else do envp'' <- peekCStringArray cEnvp
+               free cEnvp
+               return . Just $ map envSplit envp''
   where
     newCEnvp = mapM (newCString . envJoin) envp
     freeCEnvp = mapM free
