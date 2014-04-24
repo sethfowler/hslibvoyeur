@@ -16,25 +16,33 @@
 -- or 'ProcessID' to 'startObserving', and your handlers will be
 -- called as events happen.
 --
--- A simple function that prints a message every time a child
+-- A simple program that prints a message every time a child
 -- process opened a file might look like this:
 --
--- > withVoyeur $ \ctx -> do
--- >   -- Set up a handler.
--- >   observeOpen ctx defaultOpenFlags $
--- >     \path _ _ _ _ pid -> putStrLn $ show pid ++ " opened " ++ show path
--- >
--- >   -- Set up the environment.
--- >   curEnv <- getEnvironment
--- >   newEnv <- prepareEnvironment ctx
--- >   
--- >   when (isJust newEnv) $ do
--- >     -- Start the child process.
--- >     handle <- runProcess program args Nothing newEnv Nothing Nothing Nothing
--- >
--- >     -- Observe it! startObserving only returns when the child process
--- >     -- exits, so we don't need to wait.
--- >     void $ startObserving ctx handle
+-- > import Control.Monad
+-- > import Data.Maybe
+-- > import System.Environment
+-- > import System.Process
+-- > import System.Process.Voyeur
+-- > 
+-- > main = do
+-- >   (program : args) <- getArgs
+-- >   withVoyeur $ \ctx -> do
+-- >     -- Set up a handler.
+-- >     observeOpen ctx defaultOpenFlags $
+-- >       \path _ _ _ _ pid -> putStrLn $ show pid ++ " opened " ++ show path
+-- > 
+-- >     -- Set up the environment.
+-- >     curEnv <- getEnvironment
+-- >     newEnv <- prepareEnvironment ctx curEnv
+-- >     
+-- >     when (isJust newEnv) $ do
+-- >       -- Start the child process.
+-- >       handle <- runProcess program args Nothing newEnv Nothing Nothing Nothing
+-- > 
+-- >       -- Observe it! startObserving only returns when the child process
+-- >       -- exits, so we don't need to wait.
+-- >       void $ startObserving ctx handle
 --
 -- A larger example program is included with the source code to this package.
 module System.Process.Voyeur
@@ -44,7 +52,7 @@ module System.Process.Voyeur
 , FFI.prepareEnvironment
 , startObserving
 
--- * Observing 'exec*' calls
+-- * Observing \'exec\' calls
 , FFI.ObserveExecFlags(..)
 , FFI.defaultExecFlags
 , FFI.ObserveExecHandler

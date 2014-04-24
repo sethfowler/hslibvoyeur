@@ -58,7 +58,7 @@ destroyContext = voyeur_context_destroy . unVoyeurContext
 -- Registering callbacks for particular events.
 --------------------------------------------------
 
--- | Flags for observing 'exec*' calls.
+-- | Flags for observing 'exec' calls.
 data ObserveExecFlags = ObserveExecFlags
   { observeExecCWD      :: !Bool  -- ^ True if you want the current working directory.
   , observeExecEnv      :: !Bool  -- ^ True if you want the environment. (Potentially slow.)
@@ -80,7 +80,7 @@ foreign import ccall "wrapper"
 foreign import ccall unsafe "voyeur.h voyeur_observe_exec"
   voyeur_observe_exec :: Ptr () -> Word8 -> FunPtr ExecCallback -> Ptr () -> IO ()
                          
--- | A handler for 'exec*' calls.
+-- | A handler for 'exec' calls.
 type ObserveExecHandler = BS.ByteString                     -- ^ The file being executed.
                        -> [BS.ByteString]                   -- ^ The arguments.
                        -> [(BS.ByteString, BS.ByteString)]  -- ^ The environment (if requested).
@@ -91,7 +91,7 @@ type ObserveExecHandler = BS.ByteString                     -- ^ The file being 
                        -> ProcessID                         -- ^ The parent process ID.
                        -> IO ()
 
--- | Observe calls to the 'exec*' and 'posix_spawn*' families of functions.
+-- | Observe calls to the 'exec' and 'posix_spawn' families of functions.
 observeExec :: VoyeurContext        -- ^ The context.
             -> ObserveExecFlags     -- ^ Flags controlling what will be observed.
             -> ObserveExecHandler   -- ^ A handler for observed 'exec*' events.
@@ -127,7 +127,7 @@ type ObserveExitHandler = ExitCode   -- ^ The exit status.
                        -> ProcessID  -- ^ The parent process ID of the exiting process.
                        -> IO ()
 
--- | Observe calls to \'exit\'.
+-- | Observe calls to the \'exit\' family of functions.
 observeExit :: VoyeurContext       -- ^ The context.
             -> ObserveExitHandler  -- ^ A handler for observed \'exit\' events.
             -> IO ()
