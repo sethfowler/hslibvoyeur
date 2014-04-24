@@ -34,11 +34,13 @@ doWatch args c = do
     void $ startObserving c handle
 
 execHandler :: ObserveExecHandler
-execHandler path argv envp cwd pid ppid = do
-  putStrLn $ "[EXEC] " ++ show path ++ " " ++ show argv
+execHandler file argv envp path cwd pid ppid = do
+  putStrLn $ "[EXEC] " ++ show file ++ " " ++ show argv
                        ++ " (in " ++ show cwd ++ ")"
                        ++ " (pid " ++ show pid ++ ")"
                        ++ " (ppid " ++ show ppid ++ ")"
+  unless (null path) $
+    putStrLn $ "  path: " ++ show path
   unless (null envp) $ do
     putStrLn "  environment:"
     forM_ envp $ \e ->

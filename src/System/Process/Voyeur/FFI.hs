@@ -62,16 +62,17 @@ destroyContext = voyeur_context_destroy . unVoyeurContext
 data ObserveExecFlags = ObserveExecFlags
   { observeExecCWD      :: !Bool  -- ^ True if you want the current working directory.
   , observeExecEnv      :: !Bool  -- ^ True if you want the environment. (Potentially slow.)
+  , observeExecPath     :: !Bool  -- ^ True if you want the value of 'PATH'.
   , observeExecNoAccess :: !Bool  -- ^ True if you want to see calls that
                                   --   fail due to access restrictions.
   } deriving (Eq, Show)
 
 -- | Default flags which observe the minimum amount of information.
 defaultExecFlags :: ObserveExecFlags
-defaultExecFlags = ObserveExecFlags False False False
+defaultExecFlags = ObserveExecFlags False False False False
 
 type ExecCallback = CString -> Ptr CString -> Ptr CString -> CString
-                 -> CPid -> CPid -> Ptr () -> IO ()
+                 -> CString -> CPid -> CPid -> Ptr () -> IO ()
 
 foreign import ccall "wrapper"
   wrapExecCallback :: ExecCallback -> IO (FunPtr ExecCallback)
@@ -83,6 +84,7 @@ foreign import ccall unsafe "voyeur.h voyeur_observe_exec"
 type ObserveExecHandler = BS.ByteString                     -- ^ The file being executed.
                        -> [BS.ByteString]                   -- ^ The arguments.
                        -> [(BS.ByteString, BS.ByteString)]  -- ^ The environment (if requested).
+                       -> BS.ByteString                     -- ^ The value of 'PATH' (if requested).
                        -> BS.ByteString                     -- ^ The working directory
                                                             --   (if requested).
                        -> ProcessID                         -- ^ The new process ID.
@@ -97,14 +99,16 @@ observeExec :: VoyeurContext        -- ^ The context.
 observeExec c (ObserveExecFlags {..}) h = do
   let flags =  asBit 0 observeExecCWD
            .|. asBit 1 observeExecEnv
-           .|. asBit 2 observeExecNoAccess
+           .|. asBit 2 observeExecPath
+           .|. asBit 3 observeExecNoAccess
 
-  h' <- wrapExecCallback $ \path argv envp cwd pid ppid _ -> do
-    path' <- safePackCString path
+  h' <- wrapExecCallback $ \file argv envp path cwd pid ppid _ -> do
+    file' <- safePackCString file
     argv' <- packCStringArray argv
     envp' <- packCStringArray envp
+    path' <- safePackCString path
     cwd'  <- safePackCString cwd
-    h path' argv' (map bsEnvSplit envp') cwd' pid ppid
+    h file' argv' (map bsEnvSplit envp') path' cwd' pid ppid
 
   voyeur_observe_exec (unVoyeurContext c) flags h' nullPtr
     
