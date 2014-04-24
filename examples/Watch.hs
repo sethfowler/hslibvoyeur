@@ -1,4 +1,5 @@
 import Control.Monad
+import qualified Data.ByteString as B
 import Data.Maybe
 import System.Environment
 import System.Process (runProcess)
@@ -39,7 +40,7 @@ execHandler file argv envp path cwd pid ppid = do
                        ++ " (in " ++ show cwd ++ ")"
                        ++ " (pid " ++ show pid ++ ")"
                        ++ " (ppid " ++ show ppid ++ ")"
-  unless (null path) $
+  unless (B.null path) $
     putStrLn $ "  path: " ++ show path
   unless (null envp) $ do
     putStrLn "  environment:"
