@@ -13,6 +13,7 @@ import Distribution.Simple.Program
 import qualified Distribution.Verbosity as Verbosity
 import System.Directory
 import System.FilePath
+import System.Info
 
 main :: IO ()
 main = defaultMainWithHooks simpleUserHooks
@@ -29,9 +30,12 @@ customConfHook :: (GenericPackageDescription, HookedBuildInfo) -> ConfigFlags
 customConfHook (pkg, pbi) flags = do
   (_, includeDir, _) <- libvoyeurPaths
   let addIncludeDirs = (onLocalLibBuildInfo . onIncludeDirs) (++ [".", includeDir])
+      addLibs = if os == "darwin"
+                  then id
+                  else (onLocalLibBuildInfo . onLdOptions) (++ ["-lbsd"])
 
   lbi <- confHook simpleUserHooks (pkg, pbi) flags
-  return $ addIncludeDirs lbi
+  return $ (addLibs . addIncludeDirs) lbi
 
 customBuildHook :: PackageDescription -> LocalBuildInfo -> UserHooks -> BuildFlags -> IO ()
 customBuildHook pkg lbi usrHooks flags = do
@@ -130,3 +134,6 @@ onLocalLibBuildInfo = onLocalPkgDescr . onLibrary . onLibBuildInfo
 
 onIncludeDirs :: Lifter [FilePath] BuildInfo
 onIncludeDirs f libbi = libbi { includeDirs = f (includeDirs libbi) }
+
+onLdOptions :: Lifter [FilePath] BuildInfo
+onLdOptions f libbi = libbi { ldOptions = f (ldOptions libbi) }
