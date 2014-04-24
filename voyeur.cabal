@@ -1,5 +1,5 @@
 name:                voyeur
-version:             0.1.0.0
+version:             0.1.0.1
 synopsis:            Haskell bindings for libvoyeur
 description:         Haskell bindings for libvoyeur, a library for observing the private
                      activities of child processes.
@@ -38,7 +38,7 @@ extra-source-files: README.md,
 source-repository head
   type: git
   location: https://github.com/sethfowler/hslibvoyeur.git
-  tag: 0.1
+  tag: 0.1.0.1
 
 library
   ghc-options:         -Wall
