@@ -72,6 +72,11 @@ customBuildHook pkg lbi usrHooks flags = do
            let libName = buildDir lbi </> mkSharedLibName buildCompilerId componentLib
            in mapM_ (addStaticObjectFile libName) libObjs
 
+    -- A hack to make cabal happy with the contents of 'data-files' on
+    -- multiple platforms. It'd be nice to handle this more cleanly.
+    rewriteFile (libDir </> "dummy" <.> "so") ""
+    rewriteFile (libDir </> "dummy" <.> "dylib") ""
+
 customCleanHook :: PackageDescription -> () -> UserHooks -> CleanFlags -> IO ()
 customCleanHook pkg v hooks flags = do
     putStrLn "Cleaning libvoyeur..."

@@ -12,7 +12,8 @@ copyright:           Copyright (C) 2014 Seth Fowler
 category:            System
 build-type:          Custom
 cabal-version:       >= 1.20
-data-files:          libvoyeur/build/*.dylib
+data-files:          libvoyeur/build/*.dylib ,
+                     libvoyeur/build/*.so
 
 library
   ghc-options:         -Wall -O
