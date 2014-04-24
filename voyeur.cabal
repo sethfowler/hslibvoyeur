@@ -3,9 +3,6 @@ version:             0.1.0.0
 synopsis:            Haskell bindings for libvoyeur
 description:         Haskell bindings for libvoyeur, a library for observing the private
                      activities of child processes.
-                     
-                     If you encounter errors while installing, please update cabal to at
-                     least 1.20.
 homepage:            https://github.com/sethfowler/hslibvoyeur
 license:             BSD3
 license-file:        LICENSE
