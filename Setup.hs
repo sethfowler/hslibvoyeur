@@ -1,8 +1,11 @@
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TupleSections #-}
 
 import Control.Applicative
 import Control.Exception
 import Control.Monad
+import Data.List
+import Data.Traversable (for)
 import Distribution.PackageDescription
 import Distribution.Simple
 import Distribution.Simple.BuildPaths
@@ -17,13 +20,37 @@ import System.Info
 
 main :: IO ()
 main = defaultMainWithHooks simpleUserHooks
-    { confHook  = customConfHook
-    , cleanHook = customCleanHook
+    { readDesc  = customReadDesc
+    , confHook  = customConfHook
     , buildHook = customBuildHook
+    , copyHook  = customCopyHook
+    , cleanHook = customCleanHook
 
     , hookedPrograms = hookedPrograms simpleUserHooks
                     ++ [ makeProgram ]
     }
+
+customReadDesc :: IO (Maybe GenericPackageDescription)
+customReadDesc = do
+  mayGPD <- readDesc simpleUserHooks
+  for mayGPD $ \gpd -> do
+    (libvoyeurDir, _, _) <- libvoyeurPaths
+    newSrcFiles <- getRecursiveContents libvoyeurDir
+    putStrLn $ "Will add: " ++ show newSrcFiles
+    return $ (onPkgDescr . onExtraSrcFiles) (++ newSrcFiles) gpd
+
+getRecursiveContents :: FilePath -> IO [FilePath]
+getRecursiveContents topPath = do
+  names <- getDirectoryContents topPath
+  let
+    properNames = filter (`notElem` [".", ".."]) names
+  paths <- forM properNames $ \name -> do
+    let path = topPath </> name
+    isDirectory <- doesDirectoryExist path
+    if isDirectory && not ("build" `isSuffixOf` path)
+      then getRecursiveContents path
+      else return [path]
+  return (concat paths)
 
 customConfHook :: (GenericPackageDescription, HookedBuildInfo) -> ConfigFlags
                -> IO LocalBuildInfo
@@ -39,60 +66,72 @@ customConfHook (pkg, pbi) flags = do
 
 customBuildHook :: PackageDescription -> LocalBuildInfo -> UserHooks -> BuildFlags -> IO ()
 customBuildHook pkg lbi usrHooks flags = do
-    putStrLn "Building libvoyeur..."
+  putStrLn "Building libvoyeur..."
+  
+  (libvoyeurDir, _, libDir) <- libvoyeurPaths
+  let verbosity = fromFlag (buildVerbosity flags)
+      runMake = runDbProgram verbosity makeProgram (withPrograms lbi)
+  
+  inDir libvoyeurDir $
+    runMake []
+  
+  buildHook simpleUserHooks pkg lbi usrHooks flags
+  
+  notice verbosity "Relinking libvoyeur.."
+  
+  let libObjs = map (libObjPath libDir) [ "voyeur"
+                                        , "net"
+                                        , "env"
+                                        , "event"
+                                        , "util"
+                                        ]
+  
+      componentLibs = concatMap componentLibNames $ componentsConfigs lbi
+      addStaticObjectFile libName objName = runAr ["r", libName, objName]
+      runAr = runDbProgram verbosity arProgram (withPrograms lbi)
+  
+  forM_ componentLibs $ \componentLib -> do
+    when (withVanillaLib lbi) $
+         let libName = buildDir lbi </> mkLibName componentLib
+         in mapM_ (addStaticObjectFile libName) libObjs
+  
+    when (withProfLib lbi) $
+         let libName = buildDir lbi </> mkProfLibName componentLib
+         in mapM_ (addStaticObjectFile libName) libObjs
+  
+    when (withSharedLib lbi) $
+         let libName = buildDir lbi </> mkSharedLibName buildCompilerId componentLib
+         in mapM_ (addStaticObjectFile libName) libObjs
 
-    (libvoyeurDir, _, libDir) <- libvoyeurPaths
-    let verbosity = fromFlag (buildVerbosity flags)
-        runMake = runDbProgram verbosity makeProgram (withPrograms lbi)
+customCopyHook :: PackageDescription -> LocalBuildInfo -> UserHooks -> CopyFlags -> IO ()
+customCopyHook pkg lbi hooks flags = do
+  let verb = fromFlagOrDefault Verbosity.normal $ copyVerbosity flags
 
-    inDir libvoyeurDir $
-      runMake []
+  copyHook simpleUserHooks pkg lbi hooks flags
 
-    buildHook simpleUserHooks pkg lbi usrHooks flags
+  putStrLn "Installing libvoyeur helper libraries..."
 
-    notice verbosity "Relinking libvoyeur.."
+  let helperLibs = [ "exec", "exit", "open", "close" ]
+      helperLibFiles = map (("libvoyeur-" ++) . (<.> dllExtension)) helperLibs
+      helperLibDir = datadir (absoluteInstallDirs pkg lbi NoCopyDest)
 
-    let libObjs   = map (libObjPath libDir) [ "voyeur"
-                                            , "net"
-                                            , "env"
-                                            , "event"
-                                            , "util"
-                                            ]
-
-        componentLibs = concatMap componentLibNames $ componentsConfigs lbi
-        addStaticObjectFile libName objName = runAr ["r", libName, objName]
-        runAr = runDbProgram verbosity arProgram (withPrograms lbi)
-
-    forM_ componentLibs $ \componentLib -> do
-      when (withVanillaLib lbi) $
-           let libName = buildDir lbi </> mkLibName componentLib
-           in mapM_ (addStaticObjectFile libName) libObjs
-
-      when (withProfLib lbi) $
-           let libName = buildDir lbi </> mkProfLibName componentLib
-           in mapM_ (addStaticObjectFile libName) libObjs
-
-      when (withSharedLib lbi) $
-           let libName = buildDir lbi </> mkSharedLibName buildCompilerId componentLib
-           in mapM_ (addStaticObjectFile libName) libObjs
-
-    -- A hack to make cabal happy with the contents of 'data-files' on
-    -- multiple platforms. It'd be nice to handle this more cleanly.
-    rewriteFile (libDir </> "dummy" <.> "so") ""
-    rewriteFile (libDir </> "dummy" <.> "dylib") ""
-
+  (_, _, libDir) <- libvoyeurPaths
+  copyFiles verb helperLibDir $ map (libDir,) helperLibFiles
+  
+-- TODO: Put the libclang repo in extra-source-files.
+      
 customCleanHook :: PackageDescription -> () -> UserHooks -> CleanFlags -> IO ()
 customCleanHook pkg v hooks flags = do
-    putStrLn "Cleaning libvoyeur..."
-
-    let verb = fromFlagOrDefault Verbosity.normal $ cleanVerbosity flags
-    pgmConf <- configureProgram verb (simpleProgram "make") defaultProgramConfiguration
-
-    (libvoyeurDir, _, _) <- libvoyeurPaths
-    inDir libvoyeurDir $
-      runDbProgram verb makeProgram pgmConf ["clean"]
-
-    cleanHook simpleUserHooks pkg v hooks flags
+  putStrLn "Cleaning libvoyeur..."
+  
+  let verb = fromFlagOrDefault Verbosity.normal $ cleanVerbosity flags
+  pgmConf <- configureProgram verb (simpleProgram "make") defaultProgramConfiguration
+  
+  (libvoyeurDir, _, _) <- libvoyeurPaths
+  inDir libvoyeurDir $
+    runDbProgram verb makeProgram pgmConf ["clean"]
+  
+  cleanHook simpleUserHooks pkg v hooks flags
 
 libvoyeurPaths :: IO (FilePath, FilePath, FilePath)
 libvoyeurPaths = do
@@ -137,3 +176,9 @@ onIncludeDirs f libbi = libbi { includeDirs = f (includeDirs libbi) }
 
 onLdOptions :: Lifter [FilePath] BuildInfo
 onLdOptions f libbi = libbi { ldOptions = f (ldOptions libbi) }
+
+onPkgDescr :: Lifter PackageDescription GenericPackageDescription
+onPkgDescr f gpd = gpd { packageDescription = f (packageDescription gpd) }
+
+onExtraSrcFiles :: Lifter [FilePath] PackageDescription
+onExtraSrcFiles f pd = pd { extraSrcFiles = f (extraSrcFiles pd) }

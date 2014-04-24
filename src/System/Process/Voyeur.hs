@@ -72,7 +72,6 @@ module System.Process.Voyeur
 import Control.Concurrent.MVar (readMVar)
 import Control.Exception (bracket)
 import System.Exit (ExitCode(..))
-import System.FilePath
 import System.Posix.Types (ProcessID)
 import System.Process.Internals (ProcessHandle(..), ProcessHandle__(..))
 
@@ -86,8 +85,8 @@ withVoyeur = bracket initContext FFI.destroyContext
  where
    initContext = do
      c <- FFI.createContext
-     rPath <- getDataFileName $ "libvoyeur" </> "build"
-     FFI.setResourcePath c (addTrailingPathSeparator rPath)
+     rPath <- getDataFileName $ "/"
+     FFI.setResourcePath c rPath
      return c
 
 -- | The class of values that contain a 'ProcessID'. This is used to
