@@ -20,8 +20,7 @@ import System.Info
 
 main :: IO ()
 main = defaultMainWithHooks simpleUserHooks
-    { readDesc  = customReadDesc
-    , confHook  = customConfHook
+    { confHook  = customConfHook
     , buildHook = customBuildHook
     , copyHook  = customCopyHook
     , cleanHook = customCleanHook
@@ -29,28 +28,6 @@ main = defaultMainWithHooks simpleUserHooks
     , hookedPrograms = hookedPrograms simpleUserHooks
                     ++ [ makeProgram ]
     }
-
-customReadDesc :: IO (Maybe GenericPackageDescription)
-customReadDesc = do
-  mayGPD <- readDesc simpleUserHooks
-  for mayGPD $ \gpd -> do
-    (libvoyeurDir, _, _) <- libvoyeurPaths
-    newSrcFiles <- getRecursiveContents libvoyeurDir
-    putStrLn $ "Will add: " ++ show newSrcFiles
-    return $ (onPkgDescr . onExtraSrcFiles) (++ newSrcFiles) gpd
-
-getRecursiveContents :: FilePath -> IO [FilePath]
-getRecursiveContents topPath = do
-  names <- getDirectoryContents topPath
-  let
-    properNames = filter (`notElem` [".", ".."]) names
-  paths <- forM properNames $ \name -> do
-    let path = topPath </> name
-    isDirectory <- doesDirectoryExist path
-    if isDirectory && not ("build" `isSuffixOf` path)
-      then getRecursiveContents path
-      else return [path]
-  return (concat paths)
 
 customConfHook :: (GenericPackageDescription, HookedBuildInfo) -> ConfigFlags
                -> IO LocalBuildInfo
@@ -117,8 +94,6 @@ customCopyHook pkg lbi hooks flags = do
 
   (_, _, libDir) <- libvoyeurPaths
   copyFiles verb helperLibDir $ map (libDir,) helperLibFiles
-  
--- TODO: Put the libclang repo in extra-source-files.
       
 customCleanHook :: PackageDescription -> () -> UserHooks -> CleanFlags -> IO ()
 customCleanHook pkg v hooks flags = do
